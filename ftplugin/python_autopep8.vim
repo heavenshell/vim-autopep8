@@ -1,130 +1,212 @@
 "=========================================================
-" File:        python_autopep8.vim
-" Author:      tell-k <ffk2005[at]gmail.com>
-" Last Change: 23-May-2014.
-" Version:     1.0.6
-" WebPage:     https://github.com/tell-k/vim-autopep8
-" License:     MIT Licence
+" File: autopep8.vim
+" Author: tell-k <ffk2005[at]gmail.com>
+" Modifyed: Shinya Ohyanagi <sohyanagi@gmail.com>
+" Last Change: 13-Sep-2014.
+" Version: 1.1.0
+" Original WebPage: https://github.com/tell-k/vim-autopep8
+" WebPage: https://github.com/heavenshell/vim-autopep8
+" License: MIT Licence
+"
+" This plugin is almost copied from Golang's vim plugin.
+" see https://github.com/vim-jp/vim-go-extra/blob/master/ftplugin/go/fmt.vim
+"
+" Copyright 2011 The Go Authors. All rights reserved.
+" Copyright 2013 tell-k <ffk2005[at]gmail.com> All rights reserved.
+" Copyright 2014 Shinya Ohyanagi. All rights reserved.
 "==========================================================
-" see also README.rst
-
-" Only do this when not done yet for this buffer
-if exists("b:loaded_autopep8_ftplugin")
+if exists("b:did_ftplugin_autopep8")
     finish
 endif
-let b:loaded_autopep8_ftplugin=1
 
-if !exists("*Autopep8(...)")
-    function Autopep8(...)
+let s:save_cpo = &cpo
+set cpo&vim
 
-        let l:args = get(a:, 1, '')
-
-        if exists("g:autopep8_cmd")
-            let autopep8_cmd=g:autopep8_cmd
-        else
-            let autopep8_cmd="autopep8"
-        endif
-
-        if !executable(autopep8_cmd)
-            echoerr "File " . autopep8_cmd . " not found. Please install it first."
-            return
-        endif
-
-        if exists("g:autopep8_ignore")
-            let autopep8_ignores=" --ignore=".g:autopep8_ignore
-        else
-            let autopep8_ignores=""
-        endif
-
-        if exists("g:autopep8_select")
-            let autopep8_selects=" --select=".g:autopep8_select
-        else
-            let autopep8_selects=""
-        endif
-
-        if exists("g:autopep8_pep8_passes")
-            let autopep8_pep8_passes=" --pep8-passes=".g:autopep8_pep8_passes
-        else
-            let autopep8_pep8_passes=""
-        endif
-
-        if exists("g:autopep8_max_line_length")
-            let autopep8_max_line_length=" --max-line-length=".g:autopep8_max_line_length
-        else
-            let autopep8_max_line_length=""
-        endif
-
-        if exists("g:autopep8_aggressive")
-            let autopep8_aggressive=" --aggressive "
-        else
-            let autopep8_aggressive=""
-        endif
-        
-        if exists("g:autopep8_indent_size")
-            let autopep8_indent_size=" --indent-size=".g:autopep8_indent_size
-        else
-            let autopep8_indent_size=""
-        endif
-
-        let execmdline=autopep8_cmd.autopep8_pep8_passes.autopep8_selects.autopep8_ignores.autopep8_max_line_length.autopep8_aggressive.autopep8_indent_size.l:args
-        let tmpfile = tempname()
-        let tmpdiff = tempname()
-        let index = 0
-        try
-            " current cursor
-            let current_cursor = getpos(".")
-            " write to temporary file
-            silent execute "!". execmdline . " \"" . expand('%:p') . "\" > " . tmpfile
-            if !exists("g:autopep8_disable_show_diff")
-                silent execute "!". execmdline . " --diff  \"" . expand('%:p') . "\" > " . tmpdiff
-            endif
-
-            " current buffer all delete
-            silent execute "%d"
-            " read temp file. and write to current buffer.
-            for line in readfile(tmpfile)
-                call append(index, line)
-                let index = index + 1
-            endfor
-            " remove last linebreak.
-            silent execute ":" . index . "," . index . "s/\\n$//g"
-            " restore cursor
-            call setpos('.', current_cursor)
-
-            " show diff
-            if !exists("g:autopep8_disable_show_diff")
-              botright new autopep8
-              setlocal buftype=nofile bufhidden=wipe nobuflisted noswapfile nowrap
-              silent execute '$read ' . tmpdiff
-              setlocal nomodifiable
-              setlocal nu
-              setlocal filetype=diff
-            endif
-
-            hi Green ctermfg=green
-            echohl Green
-            echon "Fixed with autopep8 this file."
-            echohl
-
-        finally
-            " file close
-            if filewritable(tmpfile)
-                call delete(tmpfile)
-            endif
-            if filewritable(tmpdiff)
-                call delete(tmpdiff)
-            endif
-        endtry
-
-    endfunction
+if !exists("g:autopep8_commands")
+    let g:autopep8_commands = 1
 endif
 
-" Add mappings, unless the user didn't want this.
-" The default mapping is registered under to <F8> by default, unless the user
-" remapped it already (or a mapping exists already for <F8>)
-if !exists("no_plugin_maps") && !exists("no_autopep8_maps")
-    if !hasmapto('Autopep8(')
-        noremap <buffer> <F8> :call Autopep8()<CR>
-        command! -nargs=1 -bar Autopep8 call Autopep8(<f-args>) 
+" autopep8 options.
+let s:autopep8_options = []
+
+if exists("g:autopep8_ignore")
+    call add(s:autopep8_options, " --ignore=" . g:autopep8_ignore)
+endif
+
+if exists("g:autopep8_select")
+    call add(s:autopep8_options, " --select=" . g:autopep8_select)
+endif
+
+if exists("g:autopep8_pep8_passes")
+    call add(s:autopep8_options, " --pep8-passes=" . g:autopep8_pep8_passes)
+endif
+
+if exists("g:autopep8_max_line_length")
+    call add(s:autopep8_options, " --max-line-length=" . g:autopep8_max_line_length)
+endif
+
+if exists("g:autopep8_aggressive")
+    call add(s:autopep8_options, " --aggressive")
+endif
+
+if exists("g:autopep8_indent")
+    call add(s:autopep8_indent, " --indent-size=" . g:autopep8_indent)
+endif
+
+if !exists("g:autopep8_disable_show_diff")
+    let g:autopep8_disable_show_diff = 0
+endif
+
+if !exists("g:autopep8_diff_split_window")
+    let g:autopep8_diff_split_window = "botright"
+endif
+
+if !exists("g:autopep8_command")
+    let g:autopep8_command = "autopep8"
+endif
+
+let s:autopep8_args = [
+  \ 'range'
+  \]
+
+function! s:complete(lead, cmd, pos)
+  let args = map(copy(s:autopep8_args), '"--" . v:val . "="')
+  return filter(args, 'v:val =~# "^".a:lead')
+endfunction
+
+if g:autopep8_commands
+    command! -buffer -nargs=* -range=0 -complete=customlist,<SID>complete Autopep8 call s:Autopep8(<q-args>, <count>, <line1>, <line2>)
+    nnoremap <silent> <Plug>(autopep8) :<C-u>call <SID>Autopep8()<CR>
+
+    if !exists("g:autopep8_no_default_key_mapping")
+        silent! map <unique> <F8> <Plug>(autopep8)
     endif
 endif
+
+let s:debug = 0
+if exists("g:autopep8_debug")
+    let s:debug = g:autopep8_debug
+endif
+
+function! s:get_range()
+    " Get visual mode selection for execute `autopep8 --range`.
+    let range = ""
+    let mode = visualmode(1)
+    if mode == "v" || mode == "V" || mode == ""
+        let start_lnum = line("'<")
+        let end_lnum = line("'>")
+        let range = printf(" --range %s %s ", start_lnum, end_lnum)
+    endif
+
+    return range
+endfunction
+
+function! s:parse_options(args)
+    let options = ''
+    "" Check given args are collect arg.
+    "" eg. --range is ok, but --foo is not ok.
+    let args_list = split(a:args, '--')
+    for arg in args_list
+        if arg =~ '^range='
+            let options = options . ' --' . substitute(arg, '=', ' ', '') . ' '
+        endif
+    endfor
+    return options
+endfunction
+
+function! s:Autopep8(...)
+    let args = s:parse_options(len(a:000) > 0 ? a:000[0] : '')
+    let options = join(s:autopep8_options, "")
+    let range = s:get_range()
+    if range == ''
+        let range = args
+    endif
+    let commands = g:autopep8_command . options . " " . range
+    if s:debug == 1
+        echomsg commands
+    endif
+
+    let file_path = expand("%:p")
+
+    if g:autopep8_disable_show_diff == 0
+        let winnum = bufwinnr(bufnr("^autopep8$"))
+        if winnum != -1
+            if winnum != bufwinnr("%")
+                execute winnum "wincmd w"
+            endif
+        else
+            execute "silent " . g:autopep8_diff_split_window . " noautocmd new autopep8"
+        endif
+        setlocal modifiable
+
+        silent %d _
+        call s:execute(commands . " --diff " . file_path)
+
+        setlocal buftype=nofile bufhidden=delete noswapfile
+        setlocal nomodified
+        setlocal nomodifiable
+        nnoremap <buffer> q <C-w>c
+        setlocal filetype=diff
+
+        if winnum != -1
+            if winnum != bufwinnr("%")
+                execute winnum "wincmd w"
+            else
+                execute "wincmd w"
+            endif
+        else
+            execute "wincmd w"
+        endif
+    endif
+
+    setlocal modifiable
+    call s:execute(commands . file_path)
+
+    hi Green ctermfg=green
+    echohl Green
+    redraw | echon "Fixed with autopep8 this file."
+    echohl
+endfunction
+
+function! s:execute(command)
+    " This function is almost copied from Golang's vim plugin.
+    " Copyright 2011 The Go Authors. All rights reserved.
+    " see also
+    "   https://github.com/vim-jp/vim-go-extra/blob/master/ftplugin/go/fmt.vim
+    if s:debug != 0
+        echomsg a:command
+    endif
+
+    let view = winsaveview()
+    silent execute "%!" . a:command
+
+    if v:shell_error
+        let errors = []
+        for line in getline(1, line('$'))
+            let tokens = matchlist(line, '^\(.\{-}\):\(\d\+\):\(\d\+\)\s*\(.*\)')
+            if s:debug == 1
+                echomsg line
+            endif
+            if !empty(tokens)
+                call add(errors, {"filename": @%,
+                                 \"lnum":     tokens[2],
+                                 \"col":      tokens[3],
+                                 \"text":     tokens[4]})
+            endif
+        endfor
+        if empty(errors)
+            % | " Couldn't detect autopep8 error format, output errors
+        endif
+        undo
+        if !empty(errors)
+            call setqflist(errors, 'r')
+        endif
+        echohl Error | echomsg "Autopep8 returned error" | echohl None
+    endif
+    call winrestview(view)
+endfunction
+
+let b:did_ftplugin_autopep8 = 1
+
+let &cpo = s:save_cpo
+unlet s:save_cpo
